@@ -1,10 +1,10 @@
-from pid import PID
+import pid
 import matplotlib.pyplot as plt
 import json
 
-test_pid_x = PID(0, 0, 50, 0.05, 0.0, -6, 6)
-test_pid_y = PID(0, 0, 50, 0.05, 0.0, -6, 6)
-test_pid_zw = PID(0, 0, 100, 0.05, 0.0, 0, 10)
+test_pid_x = pid.PID(0, 0, 4.4, 0.05, 0.1, -1, 1)
+test_pid_y = pid.PID(0, 0, 4.4, 0.05, 0.1, -1, 1)
+test_pid_zw = pid.PID(0, 0, 100, 0.0005, 0.1, 0.4, 2)
 
 data = []
 with open('log.txt') as file:
@@ -19,7 +19,12 @@ out_z = []
 err_x = []
 err_y = []
 err_z = []
-length = range(0, len(data))
+
+print ("Data size = %d" % len(data))
+low_range = input("Range start = ")
+hi_range = input("Range end = ")
+
+length = range(low_range, hi_range)
 
 ex_dict = {"X": {}, "Y": {}, "Z": {}}
 ex_dict['X']['minInp'] = data[0]["acc.x"]
@@ -28,7 +33,6 @@ ex_dict['Y']['minInp'] = data[0]["acc.y"]
 ex_dict['Y']['maxInp'] = data[0]["acc.y"]
 ex_dict['Z']['minInp'] = data[0]["acc.zw"]
 ex_dict['Z']['maxInp'] = data[0]["acc.zw"]
-
 
 for i in length:
     x.append(data[i]["acc.x"])
