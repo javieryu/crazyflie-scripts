@@ -34,11 +34,10 @@ class UpDown:
         self._acc_x = 0
         self._acc_y = 0
         self._acc_z = 0
-        self._acc_zw = 0
-        self._vel_x = 0
-        self._vel_y = 0
-        self._vel_z = 0
+        self._acc_zw = 0.0001
 
+        self.log = []
+        self.pidLog = []
         self.acc_pid_x = None
         self.acc_pid_y = None
         self.acc_pid_z = None
@@ -60,10 +59,10 @@ class UpDown:
         """ This callback is called form the Crazyflie API when a Crazyflie
         has been connected and the TOCs have been downloaded."""
         self.initTime = time.clock()
-        self.log_file = open('log.txt', 'w')
-        self.pid_log = open('pid.txt', 'w')
-        self.log_file.write('[\n')
-        self.pid_log.write('[\n')
+        # self.log_file = open('log.txt', 'w')
+        # self.pid_log = open('pid.txt', 'w')
+        # self.log_file.write('[\n')
+        # self.pid_log.write('[\n')
         try:
             self._cf.log.add_config(self._logger)
             # This callback will receive the data
@@ -89,7 +88,9 @@ class UpDown:
         self._acc_z = float(data['acc.z'])
         self._acc_zw = data['acc.zw']
 
-        self.log_file.write(json.dumps(data, sort_keys=True) + ",\n")
+        # self.log_file.write(json.dumps(data, sort_keys=True) + ",\n")
+
+        self.log.append(data)
 
         self.init = True
 
@@ -98,24 +99,37 @@ class UpDown:
         at the specified address)"""
         print('Connection to %s failed: %s' % (link_uri, msg))
         self.is_connected = False
-        self.log_file.write(']')
-        self.pid_log.write(']')
-        self.log_file.close()
-        self.pid_log.close()
+        # self.log_file.write(']')
+        # self.pid_log.write(']')
+        # self.log_file.close()
+        # self.pid_log.close()
+
+        with open('log.txt', 'w') as logFile:
+            json.dump(self.log, logFile)
+        with open('pid.txt', 'w') as pidFile:
+            json.dump(self.pidLog, pidFile)
 
     def _connection_lost(self, link_uri, msg):
         """Callback when disconnected after a connection has been made (i.e
         Crazyflie moves out of range)"""
         print('Connection to %s lost: %s' % (link_uri, msg))
-        self.log_file.write(']')
-        self.pid_log.write(']')
-        self.log_file.close()
-        self.pid_log.close()
+        # self.log_file.write(']')
+        # self.pid_log.write(']')
+        # self.log_file.close()
+        # self.pid_log.close()
+        with open('log.txt', 'w') as logFile:
+            json.dump(self.log, logFile)
+        with open('pid.txt', 'w') as pidFile:
+            json.dump(self.pidLog, pidFile)
 
     def _disconnected(self, link_uri):
         """Callback when the Crazyflie is disconnected (called in all cases)"""
         print('Disconnected from %s' % link_uri)
         self.is_connected = False
+        with open('log.txt', 'w') as logFile:
+            json.dump(self.log, logFile)
+        with open('pid.txt', 'w') as pidFile:
+            json.dump(self.pidLog, pidFile)
 
     def _exit_task(self):
         while not self.exit:
@@ -131,44 +145,56 @@ class UpDown:
 
             if not self.init:
 
-                self.acc_pid_x = pid.PID(0, 0, 4.4, 0.05, 0.1, -1.5, 1.5)
-                self.acc_pid_y = pid.PID(0, 0, 4.4, 0.05, 0.1, -1.5, 1.5)
-                self.acc_pid_z = pid.PID(0, 0, 100, 0.0005, 0.1, 0, 2)
+                self.acc_pid_x = pid.PID(0, 0, 4.4, 0.05, 0.1, -1, 1)
+                self.acc_pid_y = pid.PID(0, 0, 4.4, 0.05, 0.1, -1, 1)
+                self.acc_pid_z = pid.PID(0, 0, 100, 0.0005, 0.1, 0.4, 2)
+                # Thread(target=self._log_pid).start()
                 continue
 
             inp_acc_x = self._acc_x
-            out_acc_x, err_acc_x = self.acc_pid_x.compute(inp_acc_x)
-            setPitch = -out_acc_x*10
+            self.out_acc_x, self.err_acc_x = self.acc_pid_x.compute(inp_acc_x)
+            self.setPitch = -self.out_acc_x*10
 
             inp_acc_y = self._acc_y
-            out_acc_y, err_acc_y = self.acc_pid_y.compute(inp_acc_y)
-            setRoll = out_acc_y*10
+            self.out_acc_y, self.err_acc_y = self.acc_pid_y.compute(inp_acc_y)
+            self.setRoll = self.out_acc_y*10
 
             inp_acc_z = self._acc_zw
-            out_acc_z, err_acc_z = self.acc_pid_z.compute(inp_acc_z)
-            setThrust = int(60000*out_acc_z/2)
-            self._thrust = setThrust
+            self.out_acc_z, self.err_acc_z = self.acc_pid_z.compute(self._acc_zw)
+            self.setThrust = int(60000*self.out_acc_z/2)
+            self._thrust = self.setThrust
 
-            data = {"IN_X": inp_acc_x, "OUT_X": out_acc_x,
-                    "IN_Y": inp_acc_y, "OUT_Y": out_acc_y,
-                    "IN_Z": inp_acc_z, "OUT_Z": out_acc_z,
-                    "OUT_Roll": setRoll, "OUT_Pitch": setPitch,
-                    "OUT_Thrust": setThrust}
+            # data = {"IN_X": inp_acc_x, "OUT_X": out_acc_x,
+            #         "IN_Y": inp_acc_y, "OUT_Y": out_acc_y,
+            #         "IN_Z": self._acc_zw, "OUT_Z": out_acc_z,
+            #         "OUT_Roll": setRoll, "OUT_Pitch": setPitch,
+            #         "OUT_Thrust": setThrust}
 
-            self.pid_log.write(json.dumps(data, sort_keys=True) + ",\n")
+            # self.pidLog.append(data)
+
+            # self.pid_log.write(json.dumps(data, sort_keys=True) + ",\n")
 
             self._cf.commander.send_setpoint(
-                setRoll, setPitch, 0, self._thrust)
+                self.setRoll, self.setPitch, 0, self._thrust)
             time.sleep(0.01)
 
-        self.log_file.write(']')
-        self.pid_log.write(']')
-        self.log_file.close()
-        self.pid_log.close()
+        # self.log_file.write(']')
+        # self.pid_log.write(']')
+        # self.log_file.close()
+        # self.pid_log.close()
 
         self._cf.commander.send_setpoint(0, 0, 0, 0)
         time.sleep(1)
         self._cf.close_link()
+
+    def _log_pid(self):
+        data = {"IN_X": self._acc_x, "OUT_X": self.out_acc_x,
+                "IN_Y": self._acc_y, "OUT_Y": self.out_acc_y,
+                "IN_Z": self._acc_zw, "OUT_Z": self.out_acc_z,
+                "OUT_Roll": self.setRoll, "OUT_Pitch": self.setPitch,
+                "OUT_Thrust": self.setThrust}
+
+        self.pidLog.append(data)
 
 if __name__ == '__main__':
     cflib.crtp.init_drivers(enable_debug_driver=False)
