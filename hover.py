@@ -27,8 +27,10 @@ class Hover:
         self._lg_stab = LogConfig(name="Logger", period_in_ms=10)
         self._lg_stab.add_variable('acc.x', "float")
         self._lg_stab.add_variable('acc.y', "float")
-        self._lg_stab.add_variable('acc.z', "float")
         self._lg_stab.add_variable('acc.zw', "float")
+        
+        #PID for Z velocity??
+        self._lg_stab.add_variable('acc.z', "float")
         #self._lg_stab.add_variable("", "float")
         
         self._cf.open_link(link_uri)
@@ -37,16 +39,22 @@ class Hover:
         
         self._acc_x = 0.0
         self._acc_y = 0.0
-        self._acc_z = 0.0
         self._acc_zw = 0.0
-        self._vel_z = 0.0
+        #self._acc_z = 0.0
+        #self._vel_z = 0.0
         
-        self._acc_pid_x = pid.PID(0, 0, 4.4, 0.05, 0.1, -1.5, 1.5)
-        self._acc_pid_y = pid.PID(0, 0, 4.4, 0.05, 0.1, -1.5, 1.5)
+        #ROLL/PITCH
+        maxangle = 1.5
+        kpangle = 4.4        
+        kiangle = 0.05
+        kdangle = 0.1
+        
+        self._acc_pid_x = pid.PID(0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
+        self._acc_pid_y = pid.PID(0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
         self._acc_pid_z = pid.PID(0, 0, 100, 0.0005, 0.1, 0, 2)
         
         self._is_connected = True
-        self._acc_log = []
+        #self._acc_log = []
         self.exit = False
 
 
@@ -80,9 +88,9 @@ class Hover:
         """Callback froma the log API when data arrives"""
         self._acc_x = float(data['acc.x'])
         self._acc_y = float(data['acc.y'])
-        self._acc_z = float(data['acc.z'])
         self._acc_zw = float(data['acc.zw'])
-        self._vel_z = float(data["acc.x"])
+        self._acc_z = float(data['acc.z'])
+        #self._vel_z = float(data["acc.x"])
         
     def _connection_failed(self, link_uri, msg):
         """Callback when connection initial connection fails (i.e no Crazyflie
@@ -173,11 +181,10 @@ class Hover:
     def _hover(self):
         print("Starting Hover")
         self._cf.commander.send_setpoint(0,0,0,0)
+        
         self._output_pitch_raw = None
         self._output_roll_raw = None
         self._output_thrust_raw = None
-        
-        
         
         while not self.exit:
             self._output_pitch_raw = self._acc_pid_x.compute(self._acc_x)[0]
@@ -188,15 +195,13 @@ class Hover:
             self._output_roll = self._output_roll_raw*10
             self._output_thrust = int(60000*(self._output_thrust_raw)/2)
             
-            self._cf.commander.send_setpoint(0, 0, 0, 0)
-            time.sleep(0.5)
+            self._cf.commander.send_setpoint(0,0,0,0)
+            #self._cf.commander.send_setpoint(self._output_pitch, self._output_roll, 0, self._output_thrust)
+            time.sleep(0.02)
         
         self._cf.commander.send_setpoint(0, 0, 0, 0)
         time.sleep(0.1)
         self._cf.close_link()
-
-
-
 
 if __name__ == '__main__':
     cflib.crtp.init_drivers(enable_debug_driver=False)
