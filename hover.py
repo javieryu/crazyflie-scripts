@@ -44,14 +44,15 @@ class Hover:
         #self._vel_z = 0.0
         
         #ROLL/PITCH
-        maxangle = 1.5
-        kpangle = 4.4        
+        maxangle = 0.25
+        
+        kpangle = 2.0        
         kiangle = 0.05
         kdangle = 0.1
         
         self._acc_pid_x = pid.PID(0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
         self._acc_pid_y = pid.PID(0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
-        self._acc_pid_z = pid.PID(0, 0, 100, 0.0005, 0.1, 0, 2)
+        self._acc_pid_z = pid.PID(0, 0, 50, 0.0005, 0.1, 0, 2)
         
         self._is_connected = True
         #self._acc_log = []
@@ -151,6 +152,8 @@ class Hover:
             data['out_roll'].append(self._output_roll_raw)
             data['out_thrust'].append(self._output_thrust_raw)
             
+            #print(int(65000*(self._output_thrust_raw)/2))
+            
             line1.set_ydata(data['acc.x'])
             line1.set_xdata(x)
             line2.set_ydata(data['out_pitch'])
@@ -175,6 +178,12 @@ class Hover:
             
             #time.sleep(0.5)
             plt.pause(0.05)
+
+        filename = str(input('Log File Name'))
+        if filename != '0':
+            fig.savefig(filename)
+        
+        self._cf.close_link()
         print("Closing Log task")
 
 
@@ -193,7 +202,7 @@ class Hover:
             
             self._output_pitch = -(self._output_pitch_raw)*10
             self._output_roll = self._output_roll_raw*10
-            self._output_thrust = int(60000*(self._output_thrust_raw)/2)
+            self._output_thrust = int(65000*(self._output_thrust_raw)/2)
             
             self._cf.commander.send_setpoint(0,0,0,0)
             #self._cf.commander.send_setpoint(self._output_pitch, self._output_roll, 0, self._output_thrust)
@@ -201,7 +210,7 @@ class Hover:
         
         self._cf.commander.send_setpoint(0, 0, 0, 0)
         time.sleep(0.1)
-        self._cf.close_link()
+        #self._cf.close_link()
 
 if __name__ == '__main__':
     cflib.crtp.init_drivers(enable_debug_driver=False)
