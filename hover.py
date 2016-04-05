@@ -4,6 +4,7 @@ import cflib
 from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.log import LogConfig
 import json
+import matplotlib.pyplot as plt
 
 import pid
 
@@ -40,12 +41,12 @@ class Hover:
         self._acc_zw = 0.0
         self._vel_z = 0.0
         
-        self.acc_pid_x = None
-        self.acc_pid_y = None
-        self.acc_pid_z = None
+        self._acc_pid_x = pid.PID(0, 0, 4.4, 0.05, 0.1, -1.5, 1.5)
+        self._acc_pid_y = pid.PID(0, 0, 4.4, 0.05, 0.1, -1.5, 1.5)
+        self._acc_pid_z = pid.PID(0, 0, 100, 0.0005, 0.1, 0, 2)
         
-        self.is_connected = True
-        self.acc_log = []
+        self._is_connected = True
+        self._acc_log = []
         self.exit = False
 
 
@@ -96,6 +97,7 @@ class Hover:
     def _disconnected(self, link_uri):
         """Callback when the Crazyflie is disconnected (called in all cases)"""
         print("Disconnected from %s" % link_uri)
+        self._is_connected = False
     
     def _exit_task(self):
         while not self.exit:
@@ -105,29 +107,87 @@ class Hover:
     
     def _log_task(self):
         
-        time.sleep(5)
+        time.sleep(3)
+        print("Done log sleep!")
+        
+        x = [0]
+        it = 0
+        data = {'acc.x':[0],'acc.y':[0],'acc.zw':[0],'out_pitch':[0],'out_roll':[0],'out_thrust':[0]}
+        
+        plt.ion()
+        fig = plt.figure()
+        
+        ax1 = fig.add_subplot(311)
+        line1, = ax1.plot(x, data['acc.x'], 'b-')
+        line2, = ax1.plot(x, data['out_pitch'], 'r-')
+        
+        ax2 = fig.add_subplot(312)
+        line3, = ax2.plot(x,data['acc.y'],'b-')
+        line4, = ax2.plot(x,data['out_roll'], 'r-')
+        
+        ax3 = fig.add_subplot(313)
+        line5, = ax3.plot(data['acc.zw'], 'b-')
+        line6, = ax3.plot(data['out_thrust'], 'r-')
+        
+        fig.canvas.draw()
+        plt.show(block=False)
         
         while not self.exit:
-            print('Acc.x %f:' % self._acc_x)
-            print('Acc.y %f:' % self._acc_y)
-            print('Acc.z %f:' % self._acc_z)
-            print('Acc.zw %f:' % self._acc_zw)
-            print('+++++++++++++++++++++')
-            time.sleep(0.5)
-        
+            it += 1
+            x.append(it)
+            
+            data['acc.x'].append(self._acc_x)
+            data['acc.y'].append(self._acc_y)
+            data['acc.zw'].append(self._acc_zw)
+            data['out_pitch'].append(self._output_pitch_raw)
+            data['out_roll'].append(self._output_roll_raw)
+            data['out_thrust'].append(self._output_thrust_raw)
+            
+            line1.set_ydata(data['acc.x'])
+            line1.set_xdata(x)
+            line2.set_ydata(data['out_pitch'])
+            line2.set_xdata(x)
+            line3.set_ydata(data['acc.y'])
+            line3.set_xdata(x)
+            line4.set_ydata(data['out_roll'])
+            line4.set_xdata(x)
+            line5.set_ydata(data['acc.zw'])
+            line5.set_xdata(x)
+            line6.set_ydata(data['out_thrust'])
+            line6.set_xdata(x)
+            
+            ax1.relim()
+            ax1.autoscale_view(True,True,True)
+            ax2.relim()
+            ax2.autoscale_view(True,True,True)
+            ax3.relim()
+            ax3.autoscale_view(True,True,True)
+            
+            fig.canvas.draw()
+            
+            #time.sleep(0.5)
+            plt.pause(0.05)
         print("Closing Log task")
 
 
     def _hover(self):
         print("Starting Hover")
         self._cf.commander.send_setpoint(0,0,0,0)
+        self._output_pitch_raw = None
+        self._output_roll_raw = None
+        self._output_thrust_raw = None
         
-        #Create PIDs
-        self.acc_pid_x = pid.PID(0, 0, 4.4, 0.05, 0.1, -1.5, 1.5)
-        self.acc_pid_y = pid.PID(0, 0, 4.4, 0.05, 0.1, -1.5, 1.5)
-        self.acc_pid_z = pid.PID(0, 0, 100, 0.0005, 0.1, 0, 2)
+        
         
         while not self.exit:
+            self._output_pitch_raw = self._acc_pid_x.compute(self._acc_x)[0]
+            self._output_roll_raw = self._acc_pid_y.compute(self._acc_y)[0]
+            self._output_thrust_raw = self._acc_pid_z.compute(self._acc_zw)[0]
+            
+            self._output_pitch = -(self._output_pitch_raw)*10
+            self._output_roll = self._output_roll_raw*10
+            self._output_thrust = int(60000*(self._output_thrust_raw)/2)
+            
             self._cf.commander.send_setpoint(0, 0, 0, 0)
             time.sleep(0.5)
         
@@ -151,7 +211,7 @@ if __name__ == '__main__':
     if len(available) > 0:
         index = int(input('Radio? '))
         le = Hover(available[index][0])
-        while le.is_connected:
+        while le._is_connected:
             time.sleep(1)
     else:
         print("No Crazyflies found, cannot run example")
