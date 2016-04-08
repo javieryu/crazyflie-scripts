@@ -12,8 +12,9 @@ import logging
 
 logging.basicConfig(level=logging.ERROR)
 
+
 class Hover:
-    
+
     def __init__(self, link_uri):
         """ Initialize and run the example with the specified link_uri """
 
@@ -28,41 +29,55 @@ class Hover:
         self._lg_stab.add_variable('acc.x', "float")
         self._lg_stab.add_variable('acc.y', "float")
         self._lg_stab.add_variable('acc.zw', "float")
-        
-        #PID for Z velocity??
-        self._lg_stab.add_variable('acc.z', "float")
-        #self._lg_stab.add_variable("", "float")
-        
+        self._lg_stab.add_variable('gyro.x', "float")
+        self._lg_stab.add_variable('gyro.y', "float")
+        self._lg_stab.add_variable('gyro.z', "float")
+
+        # PID for Z velocity??
+        # self._lg_stab.add_variable('acc.z', "float")
+        # self._lg_stab.add_variable("", "float")
+
         self._cf.open_link(link_uri)
 
         print("Connecting to %s" % link_uri)
-        
+
         self._acc_x = 0.0
         self._acc_y = 0.0
         self._acc_zw = 0.0
-        #self._acc_z = 0.0
-        #self._vel_z = 0.0
-        
-        #ROLL/PITCH
-        maxangle = 0.25
-        
-        kpangle = 2.0        
-        kiangle = 0.05
-        kdangle = 0.1
-        
-        self._acc_pid_x = pid.PID(0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
-        self._acc_pid_y = pid.PID(0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
-        self._acc_pid_z = pid.PID(0, 0, 10, 0.0005, 0.1, 0, 2)
-        
-        self._is_connected = True
-        #self._acc_log = []
-        self.exit = False
+        self._gyro_x = 0.0
+        self._gyro_y = 0.0
+        self._gyro_z = 0.0
+        # self._acc_z = 0.0
+        # self._vel_z = 0.0
 
+        # ROLL/PITCH
+        maxangle = 0.25
+
+        kpangle = 2.0
+        kiangle = 0.0
+        kdangle = 0.1
+
+        self._acc_pid_x = pid.PID(
+            0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
+        self._acc_pid_y = pid.PID(
+            0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
+        self._acc_pid_z = pid.PID(0, 0, 10, 0.0005, 0.1, 1/6, 2)
+
+        self._gyro_x_pid = pid.PID(
+            0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
+        self._gyro_y_pid = pid.PID(
+            0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
+        # self._gyro_z_pid = pid.PID(
+        #     0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
+
+        self._is_connected = True
+        # self._acc_log = []
+        self.exit = False
 
     def _connected(self, link_uri):
         """ This callback is called form the Crazyflie API when a Crazyflie
         has been connected and the TOCs have been downloaded."""
-        
+
         try:
             self._cf.log.add_config(self._lg_stab)
             # This callback will receive the data
@@ -76,7 +91,7 @@ class Hover:
                   "{} not found in TOC".format(str(e)))
         except AttributeError:
             print("Could not add Stabilizer log config, bad configuration.")
-        
+
         Thread(target=self._hover).start()
         Thread(target=self._log_task).start()
         Thread(target=self._exit_task).start()
@@ -90,9 +105,11 @@ class Hover:
         self._acc_x = float(data['acc.x'])
         self._acc_y = float(data['acc.y'])
         self._acc_zw = float(data['acc.zw'])
-        self._acc_z = float(data['acc.z'])
-        #self._vel_z = float(data["acc.x"])
-        
+        # self._acc_z = float(data['acc.z'])
+        self._gyro_x = float(data['gyro.x'])
+        self._gyro_y = float(data['gyro.y'])
+        self._gyro_z = float(data['gyro.z'])
+
     def _connection_failed(self, link_uri, msg):
         """Callback when connection initial connection fails (i.e no Crazyflie
         at the specified address)"""
@@ -107,110 +124,131 @@ class Hover:
         """Callback when the Crazyflie is disconnected (called in all cases)"""
         print("Disconnected from %s" % link_uri)
         self._is_connected = False
-    
+
     def _exit_task(self):
         while not self.exit:
             inp = int(input('Want to exit? [NO:0/YES:1]\n'))
             if inp != 0:
                 self.exit = True
-    
+
     def _log_task(self):
-        
+
         time.sleep(3)
         print("Done log sleep!")
-        
+
         x = [0]
         it = 0
-        data = {'acc.x':[0],'acc.y':[0],'acc.zw':[0],'out_pitch':[0],'out_roll':[0],'out_thrust':[0]}
-        
+        data = {'acc.x': [0], 'acc.y': [0], 'acc.zw': [0],
+                'gyro.x': [0], 'gyro.y': [0], 'gyro.z': [0],
+                'out_pitch': [0], 'out_roll': [0], 'out_thrust': [0]}
+
         plt.ion()
         fig = plt.figure()
-        
+
         ax1 = fig.add_subplot(311)
-        line1, = ax1.plot(x, data['acc.x'], 'b-')
-        line2, = ax1.plot(x, data['out_pitch'], 'r-')
-        
+        line1, = ax1.plot(x, data['acc.x'], 'b-', label="acc.x")
+        line2, = ax1.plot(x, data['out_pitch'], 'r-', label="out pitch")
+        lineGX, = ax1.plot(x, data['gyro.x'], 'g-', label="gyro.x")
+        # ax1.legend(handles=[line1, line2, lineGX])
+
         ax2 = fig.add_subplot(312)
-        line3, = ax2.plot(x,data['acc.y'],'b-')
-        line4, = ax2.plot(x,data['out_roll'], 'r-')
-        
+        line3, = ax2.plot(x, data['acc.y'], 'b-', label="acc.y")
+        line4, = ax2.plot(x, data['out_roll'], 'r-', label="out roll")
+        lineGY, = ax2.plot(x, data['gyro.y'], 'g-', label="gyro.y")
+        # ax1.legend(handles=[line3, line4, lineGY])
+
         ax3 = fig.add_subplot(313)
-        line5, = ax3.plot(data['acc.zw'], 'b-')
-        line6, = ax3.plot(data['out_thrust'], 'r-')
-        
+        line5, = ax3.plot(data['acc.zw'], 'b-', label="acc.zw")
+        line6, = ax3.plot(data['out_thrust'], 'r-', label="out thrust")
+        # lineGZ, = ax3.plot(data['gyro.z'], 'g-', label="gyro.z")
+        # ax1.legend(handles=[line5, line6])
+
         fig.canvas.draw()
         plt.show(block=False)
-        
+
         while not self.exit:
             it += 1
             x.append(it)
-            
+
             data['acc.x'].append(self._acc_x)
             data['acc.y'].append(self._acc_y)
             data['acc.zw'].append(self._acc_zw)
+            data['gyro.x'].append(self._gyro_x)
+            data['gyro.y'].append(self._gyro_y)
+            data['gyro.z'].append(self._gyro_z)
             data['out_pitch'].append(self._output_pitch_raw)
             data['out_roll'].append(self._output_roll_raw)
             data['out_thrust'].append(self._output_thrust_raw)
-            
-            #print(int(65000*(self._output_thrust_raw)/2))
-            
+
+            # print(int(65000*(self._output_thrust_raw)/2))
+
             line1.set_ydata(data['acc.x'])
             line1.set_xdata(x)
             line2.set_ydata(data['out_pitch'])
             line2.set_xdata(x)
+            lineGX.set_ydata(data['gyro.x'])
+            lineGX.set_xdata(x)
             line3.set_ydata(data['acc.y'])
             line3.set_xdata(x)
             line4.set_ydata(data['out_roll'])
             line4.set_xdata(x)
+            lineGY.set_ydata(data['gyro.y'])
+            lineGY.set_xdata(x)
             line5.set_ydata(data['acc.zw'])
             line5.set_xdata(x)
+            # lineGZ.set_ydata(data['gyro.z'])
+            # lineGZ.set_xdata(x)
             line6.set_ydata(data['out_thrust'])
             line6.set_xdata(x)
-            
+
             ax1.relim()
-            ax1.autoscale_view(True,True,True)
+            ax1.autoscale_view(True, True, True)
             ax2.relim()
-            ax2.autoscale_view(True,True,True)
+            ax2.autoscale_view(True, True, True)
             ax3.relim()
-            ax3.autoscale_view(True,True,True)
-            
+            ax3.autoscale_view(True, True, True)
+
             fig.canvas.draw()
-            
-            #time.sleep(0.5)
+
+            # time.sleep(0.5)
             plt.pause(0.05)
 
         filename = str(input('Log File Name'))
         if filename != '0':
             fig.savefig(filename)
-        
+
         self._cf.close_link()
         print("Closing Log task")
 
-
     def _hover(self):
         print("Starting Hover")
-        self._cf.commander.send_setpoint(0,0,0,0)
-        
-        self._output_pitch_raw = None
-        self._output_roll_raw = None
-        self._output_thrust_raw = None
-        
+        self._cf.commander.send_setpoint(0, 0, 0, 0)
+
+        self._output_pitch_raw = 0
+        self._output_roll_raw = 0
+        self._output_thrust_raw = 0
+
         while not self.exit:
-            self._output_pitch_raw = self._acc_pid_x.compute(self._acc_x)[0]
-            self._output_roll_raw = self._acc_pid_y.compute(self._acc_y)[0]
+            self._output_pitch_raw = (self._acc_pid_x.compute(
+                self._acc_x)[0] + self._gyro_x_pid.compute(self._gyro_x)[0])/2
+            self._output_roll_raw = (self._acc_pid_y.compute(
+                self._acc_y)[0] + self._gyro_x_pid.compute(self._gyro_x)[0])/2
             self._output_thrust_raw = self._acc_pid_z.compute(self._acc_zw)[0]
-            
+
             self._output_pitch = -(self._output_pitch_raw)*10
             self._output_roll = self._output_roll_raw*10
-            self._output_thrust = int(65000*(self._output_thrust_raw)/2)
-            
-            self._cf.commander.send_setpoint(0,0,0,0)
-            #self._cf.commander.send_setpoint(self._output_pitch, self._output_roll, 0, self._output_thrust)
+            self._output_thrust = int(60000*(self._output_thrust_raw)/2)
+
+            self._cf.commander.send_setpoint(0, 0, 0, self._output_thrust)
+            # self._cf.commander.send_setpoint(self._output_pitch,
+            #                                  self._output_roll,
+            #                                  0,
+            #                                  self._output_thrust)
             time.sleep(0.02)
-        
+
         self._cf.commander.send_setpoint(0, 0, 0, 0)
         time.sleep(0.1)
-        #self._cf.close_link()
+        # self._cf.close_link()
 
 if __name__ == '__main__':
     cflib.crtp.init_drivers(enable_debug_driver=False)
