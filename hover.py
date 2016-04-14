@@ -29,8 +29,11 @@ class Hover:
         self._lg_stab.add_variable('acc.y', "float")
         self._lg_stab.add_variable('acc.zw', "float")
         
+        #self._lg_stab.add_variable('stabilizer.roll', "float")
+        #self._lg_stab.add_variable('stabilizer.pitch', 'float')
+        
         #PID for Z velocity??
-        self._lg_stab.add_variable('acc.z', "float")
+        #self._lg_stab.add_variable('acc.z', "float")
         #self._lg_stab.add_variable("", "float")
         
         self._cf.open_link(link_uri)
@@ -40,19 +43,26 @@ class Hover:
         self._acc_x = 0.0
         self._acc_y = 0.0
         self._acc_zw = 0.0
+        
+        #self._actual_roll = 0.0
+        #self._actual_pitch = 0.0
         #self._acc_z = 0.0
         #self._vel_z = 0.0
         
         #ROLL/PITCH
-        maxangle = 0.25
+        maxangle = 5
         
-        kpangle = 2.0        
-        kiangle = 0.05
-        kdangle = 0.1
+        kpangle = 3.5        
+        kiangle = 0.002
+        kdangle = 1
         
         self._acc_pid_x = pid.PID(0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
         self._acc_pid_y = pid.PID(0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
-        self._acc_pid_z = pid.PID(0, 0, 10, 0.0005, 0.1, 0, 2)
+        self._acc_pid_z = pid.PID(0, 0, 2, 0.018, 2, 1/6, 2)
+        
+        #self._pitch_pid = pid.PID(0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
+        #self._roll_pid = pid.PID(0, 0, kpangle, kiangle, kdangle, -maxangle, maxangle)
+        
         
         self._is_connected = True
         #self._acc_log = []
@@ -91,6 +101,8 @@ class Hover:
         self._acc_y = float(data['acc.y'])
         self._acc_zw = float(data['acc.zw'])
         self._acc_z = float(data['acc.z'])
+        #self._actual_roll = float(data['stabilizer.roll'])
+        #self._actual_pitch = float(data['stabilizer.pitch'])
         #self._vel_z = float(data["acc.x"])
         
     def _connection_failed(self, link_uri, msg):
@@ -121,22 +133,27 @@ class Hover:
         
         x = [0]
         it = 0
-        data = {'acc.x':[0],'acc.y':[0],'acc.zw':[0],'out_pitch':[0],'out_roll':[0],'out_thrust':[0]}
+        data = {'acc.x':[0],'acc.y':[0],'acc.zw':[0],'out_pitch':[0],'out_roll':[0],'out_thrust':[0],
+            'stabilizer.pitch':[0], 'stabilizer.roll':[0]}
         
         plt.ion()
         fig = plt.figure()
         
-        ax1 = fig.add_subplot(311)
+        ax1 = fig.add_subplot(411)
         line1, = ax1.plot(x, data['acc.x'], 'b-')
         line2, = ax1.plot(x, data['out_pitch'], 'r-')
         
-        ax2 = fig.add_subplot(312)
+        ax2 = fig.add_subplot(412)
         line3, = ax2.plot(x,data['acc.y'],'b-')
         line4, = ax2.plot(x,data['out_roll'], 'r-')
         
-        ax3 = fig.add_subplot(313)
+        ax3 = fig.add_subplot(413)
         line5, = ax3.plot(data['acc.zw'], 'b-')
         line6, = ax3.plot(data['out_thrust'], 'r-')
+        
+        #ax4 = fig.add_subplot(414)
+        #line7, = ax4.plot(data['stabilizer.roll'],'b-')
+        #line8, = ax4.plot(data['stabilizer.pitch'],'b-')
         
         fig.canvas.draw()
         plt.show(block=False)
@@ -151,8 +168,10 @@ class Hover:
             data['out_pitch'].append(self._output_pitch_raw)
             data['out_roll'].append(self._output_roll_raw)
             data['out_thrust'].append(self._output_thrust_raw)
+            #data['stabilizer.roll'].append(self._actual_roll)
+            #data['stabilizer.pitch'].append(self._actual_pitch)
             
-            #print(int(65000*(self._output_thrust_raw)/2))
+            print(int(60000*(self._output_thrust_raw)/2))
             
             line1.set_ydata(data['acc.x'])
             line1.set_xdata(x)
@@ -166,6 +185,10 @@ class Hover:
             line5.set_xdata(x)
             line6.set_ydata(data['out_thrust'])
             line6.set_xdata(x)
+            #line7.set_ydata(data['stabilizer.roll'])
+            #line7.set_xdata(x)
+            #line8.set_ydata(data['stabilizer.pitch'])
+            #line8.set_xdata(x)
             
             ax1.relim()
             ax1.autoscale_view(True,True,True)
@@ -173,13 +196,15 @@ class Hover:
             ax2.autoscale_view(True,True,True)
             ax3.relim()
             ax3.autoscale_view(True,True,True)
+            #ax4.relim()
+            #ax4.autoscale_view(True,True,True)
             
             fig.canvas.draw()
             
             #time.sleep(0.5)
             plt.pause(0.05)
 
-        filename = str(input('Log File Name'))
+        filename = str(input('Log Image Name: '))
         if filename != '0':
             fig.savefig(filename)
         
@@ -200,14 +225,14 @@ class Hover:
             self._output_roll_raw = self._acc_pid_y.compute(self._acc_y)[0]
             self._output_thrust_raw = self._acc_pid_z.compute(self._acc_zw)[0]
             
-            self._output_pitch = -(self._output_pitch_raw)*10
-            self._output_roll = self._output_roll_raw*10
-            self._output_thrust = int(65000*(self._output_thrust_raw)/2)
+            self._output_pitch = -(self._output_pitch_raw)*5
+            self._output_roll = self._output_roll_raw*5
+            self._output_thrust = int(60000*(self._output_thrust_raw)/2)
             
-            self._cf.commander.send_setpoint(0,0,0,0)
-            #self._cf.commander.send_setpoint(self._output_pitch, self._output_roll, 0, self._output_thrust)
+            #self._cf.commander.send_setpoint(0,0,0,0)
+            self._cf.commander.send_setpoint(self._output_pitch, self._output_roll, 0, self._output_thrust)
             time.sleep(0.02)
-        
+
         self._cf.commander.send_setpoint(0, 0, 0, 0)
         time.sleep(0.1)
         #self._cf.close_link()
