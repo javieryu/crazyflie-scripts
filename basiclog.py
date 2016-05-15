@@ -78,6 +78,7 @@ class LoggingExample:
         self._lg_stab.add_variable("stabilizer.roll", "float")
         self._lg_stab.add_variable("stabilizer.pitch", "float")
         self._lg_stab.add_variable("acc.zw", "float")
+        self._lg_stab.add_variable("rangefinder.range")
 
         # Adding the configuration cannot be done until a Crazyflie is
         # connected, since we need to check that the variables we
